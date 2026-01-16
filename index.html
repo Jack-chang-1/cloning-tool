@@ -523,19 +523,39 @@
         });
     }
 
-    function exportToCSV() {
+    //输出到CSV文件
+   function exportToCSV() {
         const rows = document.querySelectorAll('#resultTable tr');
         let csv = "\ufeff引物名称,序列(5'-3'),长度(bp),Tm值\n";
+        let currentFragName = ""; // 用于临时存储当前片段名称
+
         rows.forEach(row => {
             const cols = row.querySelectorAll('td');
+            
+            // 情况1：F引物行（包含片段名称列，共5列）
             if (cols.length === 5) {
-                const name = cols[0].innerText.split('\n')[0] + "_" + cols[1].innerText;
-                const seq = cols[2].innerText;
+                // 提取名称（去掉换行和副标题）
+                currentFragName = cols[0].innerText.split('\n')[0]; 
+                
+                const direction = cols[1].innerText; // "F"
+                const seq = cols[2].innerText.replace(/\s+/g, ''); // 获取序列并去除可能存在的空格
                 const tm = cols[3].innerText.split('℃')[0];
                 const len = seq.length;
-                csv += `"${name}","${seq}",${len},${tm}\n`;
+                
+                csv += `"${currentFragName}_${direction}","${seq}",${len},${tm}\n`;
+            } 
+            // 情况2：R引物行（不含片段名称列，被Rowspan合并了，共4列）
+            else if (cols.length === 4) {
+                // 使用上一次循环记录的 currentFragName
+                const direction = cols[0].innerText; // "R" (索引前移一位)
+                const seq = cols[1].innerText.replace(/\s+/g, '');
+                const tm = cols[2].innerText.split('℃')[0];
+                const len = seq.length;
+                
+                csv += `"${currentFragName}_${direction}","${seq}",${len},${tm}\n`;
             }
         });
+
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
