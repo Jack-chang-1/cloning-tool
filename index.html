@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>多片段无缝克隆设计工具 V1.0</title>
+    <style>
+        :root { --primary: #2563eb; --purple: #7c3aed; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h2 { text-align: center; margin-top: 0; margin-bottom: 5px; color: #0f172a; }
+        .meta-info { text-align: center; font-size: 13px; color: #94a3b8; margin-bottom: 25px; font-weight: 500; letter-spacing: 0.5px; }
+        h3 { margin-top: 0; color: var(--purple); display: flex; align-items: center; gap: 10px; }
+        .section-title { font-weight: 700; margin: 20px 0 10px; display: flex; align-items: center; justify-content: space-between; }
+        textarea { width: 100%; height: 70px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-family: monospace; font-size: 13px; box-sizing: border-box; resize: vertical; margin-bottom: 0; }
+        textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .fragment-item { background: #f1f5f9; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #94a3b8; }
+        .frag-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+        .btn { cursor: pointer; border: none; border-radius: 6px; font-weight: 600; transition: all 0.2s; padding: 8px 16px; }
+        .btn-add { background: #10b981; color: white; font-size: 14px; }
+        .btn-del { background: #ef4444; color: white; padding: 4px 8px; font-size: 12px; }
+        .btn-run { background: var(--primary); color: white; width: 100%; padding: 15px; font-size: 18px; margin-top: 20px; }
+        .btn-calc { background: var(--purple); color: white; width: 100%; padding: 15px; font-size: 18px; margin-top: 20px; }
+        .config-bar { background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; display: flex; gap: 20px; align-items: center; border: 1px solid #e2e8f0; flex-wrap: wrap; }
+        .result-area { margin-top: 30px; display: none; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+        th { background: #f8fafc; padding: 12px; text-align: left; border-bottom: 2px solid #e2e8f0; font-size: 13px; color: #64748b; }
+        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .primer-seq { font-family: monospace; word-break: break-all; }
+        .hl-o { color: #dc2626; font-weight: bold; }
+        .hl-g { color: #16a34a; font-weight: bold; }
+        .copy-btn { padding: 4px 8px; font-size: 11px; background: #e2e8f0; border-radius: 4px; }
+        
+        .mix-input { width: 70px; padding: 5px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; }
+        .mix-result { font-weight: bold; color: var(--primary); }
+        .water-row { background: #fdf4ff; font-weight: bold; }
+
+        /* 图谱容器样式 */
+        #canvas-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* 载体输入框的布局优化 */
+        .vector-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
+        .input-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .input-desc {
+            font-weight: 400;
+            color: #94a3b8;
+            margin-left: 5px;
+        }
+        @media (max-width: 600px) {
+            .vector-inputs { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🧬 多片段无缝克隆设计工具</h2>
+    <div class="meta-info">Version: V1.0 &nbsp;|&nbsp; Author: Cinda</div>
+
+    <div class="card" style="margin-bottom: 20px; background: #fdfdfd; border: 1px dashed #cbd5e0; padding: 20px;">
+        <h4 style="margin-top:0;">✂️ 载体线性化助手</h4>
+        <textarea id="fullVector" placeholder="粘贴质粒全长序列..." oninput="clean(this)"></textarea>
+        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin-top:10px;">
+            <div>
+                <label style="font-size:12px; color:#64748b; display:block; margin-bottom:4px;">5' 端酶切位点 (Left)</label>
+                <select id="enzyme1" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e1;"></select>
+            </div>
+            <div>
+                <label style="font-size:12px; color:#64748b; display:block; margin-bottom:4px;">3' 端酶切位点 (Right)</label>
+                <select id="enzyme2" style="width:100%; padding:8px; border-radius:4px; border:1px solid #cbd5e1;"></select>
+            </div>
+            <div style="display: flex; flex-direction: column; justify-content: flex-end; gap: 5px;">
+                <button class="btn" style="background:#475569; color:white;" onclick="simulateDigestion()">执行酶切</button>
+            </div>
+        </div>
+        <div style="margin-top: 8px;">
+            <label style="font-size: 13px; color: #475569; cursor:pointer;">
+                <input type="checkbox" id="keepSites"> 保留酶切位点序列在载体上
+            </label>
+        </div>
+    </div>
+
+    <div class="section-title">载体序列 (Vector Edge)</div>
+    
+    <div class="vector-inputs">
+        <div>
+            <label class="input-label">📌 载体上游序列 <span class="input-desc">(Upstream / 5' Left)</span></label>
+            <textarea id="vecLeft" placeholder="例如：载体酶切位点左侧的序列..." oninput="clean(this)">GTTTAAACGGGCCCTCTAGACTCGAGCGGC</textarea>
+        </div>
+        <div>
+            <label class="input-label">📌 载体下游序列 <span class="input-desc">(Downstream / 3' Right)</span></label>
+            <textarea id="vecRight" placeholder="例如：载体酶切位点右侧的序列..." oninput="clean(this)">CGGGGGATCCACTAGTTCTAGAGCGGCCGC</textarea>
+        </div>
+    </div>
+
+    <div class="section-title">
+        插入片段序列 (Fragments)
+        <button class="btn btn-add" onclick="addFragment()">+ 添加片段</button>
+    </div>
+    <div id="fragmentsContainer"></div>
+
+    <div class="config-bar">
+        <span>同源臂: <input type="number" id="overlapLen" value="20" style="width:45px;"> bp</span>
+        <span>目标 Tm: <input type="number" id="targetTm" value="55" style="width:45px;"> ℃</span>
+        <span>Na+: <input type="number" id="naConc" value="50" style="width:45px;"> mM</span>
+        <span>Mg2+: <input type="number" id="mgConc" value="1.5" style="width:45px;"> mM</span>
+        <span>引物浓度: <input type="number" id="primerConc" value="500" style="width:55px;"> nM</span>
+    </div>
+
+    <button class="btn btn-run" onclick="generateMultiPrimers()">开始批量设计引物</button>
+
+    <div id="resultArea" class="result-area">
+        <div class="section-title">
+            🗺️ 质粒组装图谱 (Plasmid Map)
+        </div>
+        <div id="canvas-container">
+            <canvas id="mapCanvas" width="400" height="400"></canvas>
+        </div>
+
+        <div class="section-title">
+            引物清单 
+            <button class="btn" style="background: #16a34a; color:white; font-size: 13px;" onclick="exportToCSV()">📊 导出 CSV</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>目标片段</th>
+                    <th>方向</th>
+                    <th>序列 (5'->3')</th>
+                    <th>Tm</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="resultTable"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" style="border-top: 4px solid var(--purple);">
+    <h3>🧪 重组反应体系计算器</h3>
+    <div class="config-bar" style="background: #fdf4ff; border-color: #e9d5ff;">
+        <span>载体用量: <input type="number" id="calcVecMass" value="50" class="mix-input"> ng</span>
+        <span>片段:载体 (摩尔比): <input type="number" id="calcRatio" value="2" class="mix-input" style="width:40px;"> : 1</span>
+        <span>体系总体积: <input type="number" id="calcTotalVol" value="20" class="mix-input" style="width:40px;"> μL</span>
+    </div>
+
+    <table id="mixTable">
+        <thead>
+            <tr>
+                <th width="20%">组分</th>
+                <th width="20%">长度 (bp)</th>
+                <th width="20%">浓度 (ng/μL)</th>
+                <th width="20%">加入体积 (μL)</th>
+                <th width="20%">摩尔数 (pmol)</th>
+            </tr>
+        </thead>
+        <tbody id="mixTableBody">
+            <tr id="row-vec">
+                <td><b>线性化载体</b></td>
+                <td><input type="number" id="mixVecLen" class="mix-input" placeholder="bp"></td>
+                <td><input type="number" id="mixVecConc" class="mix-input" placeholder="ng/μL"></td>
+                <td class="mix-result" id="resVecVol">-</td>
+                <td style="font-size:12px; color:#666;" id="resVecPmol">-</td>
+            </tr>
+        </tbody>
+        <tfoot style="border-top: 2px solid #e2e8f0;">
+            <tr class="water-row">
+                <td colspan="3" style="text-align: right; color: var(--purple);">💧 补水 (ddH₂O) 至总体积:</td>
+                <td class="mix-result" id="resWater" style="color: var(--purple); font-size: 16px;">-</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+    
+    <button class="btn btn-calc" onclick="calculateMix()">计算加样体积</button>
+    <p style="font-size: 12px; color: #64748b; margin-top: 10px; text-align: center;">
+        * 计算公式: Mass(frag) = Mass(vec) × [Len(frag)/Len(vec)] × Ratio
+    </p>
+</div>
+
+<div style="text-align: center; color: #94a3b8; font-size: 12px; margin-bottom: 20px;">
+    Seamless Cloning Tool V1.0 &copy; 2024 Cinda. All rights reserved.
+</div>
+
+<script>
+    let fragmentCount = 0;
+
+    const RE_LIBRARY = {
+        "AatII": ["GACGTC", 5], "AccI": ["GTMKAC", 2], "AfeI": ["AGCGCT", 3], "AflII": ["CTTAAG", 1],
+        "AgeI": ["ACCGGT", 1], "AluI": ["AGCT", 2], "ApaI": ["GGGCCC", 5], "ApaLI": ["GTGCAC", 1],
+        "AscI": ["GGCGCGCC", 2], "AseI": ["ATTAAT", 2], "AvaI": ["CPyCGPuG", 1], "AvrII": ["CCTAGG", 1],
+        "BamHI": ["GGATCC", 1], "BclI": ["TGATCA", 1], "BglII": ["AGATCT", 1], "BmgBI": ["CACGTC", 3],
+        "BmtI": ["GCTAGC", 5], "Bpu10I": ["CCTNAGC", 2], "BsaI": ["GGTCTC", 1], "BsgI": ["GTGCAG", 16],
+        "BsiWI": ["CGTACG", 1], "BsmBI": ["CGTCTC", 1], "BspDI": ["ATCGAT", 2], "BspEI": ["TCCGGA", 1],
+        "BspHI": ["TCATGA", 1], "BsrGI": ["TGTACA", 1], "BssHII": ["GCGCGC", 1], "BstBI": ["TTCGAA", 2],
+        "BstEII": ["GGTNACC", 1], "BstXI": ["CCANNNNNNTGG", 8], "ClaI": ["ATCGAT", 2], "DpnI": ["GATC", 2],
+        "DraI": ["TTTAAA", 3], "EaeI": ["YGGCCR", 1], "EagI": ["CGGCCG", 1], "EcoNI": ["CCTNNNNNAGG", 5],
+        "EcoRI": ["GAATTC", 1], "EcoRV": ["GATATC", 3], "FseI": ["GGCCGGCC", 6], "FspI": ["TGCGCA", 3],
+        "HaeIII": ["GGCC", 2], "HincII": ["GTYRAC", 3], "HindIII": ["AAGCTT", 1], "HpaI": ["GTTAAC", 3],
+        "KasI": ["GGCGCC", 1], "KpnI": ["GGTACC", 5], "MfeI": ["CAATTG", 1], "MluI": ["ACGCGT", 1],
+        "MscI": ["TGGCCA", 3], "MspA1I": ["CMGCKG", 3], "NaeI": ["GCCGGC", 3], "NarI": ["GGCGCC", 2],
+        "NcoI": ["CCATGG", 1], "NdeI": ["CATATG", 2], "NgoMIV": ["GCCGGC", 1], "NheI": ["GCTAGC", 1],
+        "NotI": ["GCGGCCGC", 2], "NruI": ["TCGCGA", 3], "NsiI": ["ATGCAT", 5], "NspI": ["RCATGY", 5],
+        "PacI": ["TTAATTAA", 5], "PmeI": ["GTTTAAAC", 4], "PmlI": ["CACGTG", 3], "PstI": ["CTGCAG", 5],
+        "PvuI": ["CGATCG", 4], "PvuII": ["CAGCTG", 3], "SacI": ["GAGCTC", 5], "SacII": ["CCGCGG", 4],
+        "SalI": ["GTCGAC", 1], "SbfI": ["CCTGCAGG", 6], "ScaI": ["AGTACT", 3], "SfiI": ["GGCCNNNNNGGCC", 7],
+        "SmaI": ["CCCGGG", 3], "SmlI": ["CTYRAG", 1], "SnaBI": ["TACGTA", 3], "SpeI": ["ACTAGT", 1],
+        "SphI": ["GCATGC", 5], "SspI": ["AATATT", 3], "StuI": ["AGGCCT", 3], "SwaI": ["ATTTAAAT", 4],
+        "Tth111I": ["GACNNNGTC", 4], "XbaI": ["TCTAGA", 1], "XhoI": ["CTCGAG", 1], "XmaI": ["CCCGGG", 1],
+        "XmnI": ["GAANNNNTTC", 5]
+    };
+
+    window.onload = () => {
+        const sortedEnzymes = Object.keys(RE_LIBRARY).sort();
+        [1, 2].forEach(i => {
+            const sel = document.getElementById(`enzyme${i}`);
+            sel.innerHTML = '<option value="">--选择酶--</option>';
+            sortedEnzymes.forEach(name => {
+                let opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = `${name} (${RE_LIBRARY[name][0]})`;
+                sel.appendChild(opt);
+            });
+        });
+        addFragment(); addFragment();
+    };
+
+    function addFragment() {
+        if (fragmentCount >= 14) return;
+        fragmentCount++;
+        const div = document.createElement('div');
+        div.className = 'fragment-item';
+        div.id = `frag-container-${fragmentCount}`;
+        div.innerHTML = `
+            <div class="frag-header"><span>片段 ${fragmentCount}</span><button class="btn btn-del" onclick="removeFragment(${fragmentCount})">删除</button></div>
+            <textarea class="frag-input" id="frag-${fragmentCount}" oninput="clean(this)" placeholder="输入片段序列"></textarea>
+        `;
+        document.getElementById('fragmentsContainer').appendChild(div);
+        updateMixTableStructure();
+    }
+
+    function removeFragment(id) { 
+        document.getElementById(`frag-container-${id}`).remove(); 
+        updateMixTableStructure();
+    }
+    
+    function clean(el) { el.value = el.value.toUpperCase().replace(/[^ATCGN]/g, ''); }
+    
+    function revComp(seq) {
+        const map = {'A':'T','T':'A','C':'G','G':'C','N':'N'};
+        return seq.split('').reverse().map(b => map[b] || b).join('');
+    }
+
+    function calcTmNN(seq) {
+        if (seq.length < 4) return 0;
+        const nn = {
+            'AA': {h: -7.9, s: -22.2}, 'TT': {h: -7.9, s: -22.2}, 'AT': {h: -7.2, s: -20.4}, 'TA': {h: -7.2, s: -21.3},
+            'CA': {h: -8.5, s: -22.7}, 'TG': {h: -8.5, s: -22.7}, 'GT': {h: -8.4, s: -22.4}, 'AC': {h: -8.4, s: -22.4},
+            'CT': {h: -7.8, s: -21.0}, 'AG': {h: -7.8, s: -21.0}, 'GA': {h: -8.2, s: -22.2}, 'TC': {h: -8.2, s: -22.2},
+            'CG': {h: -10.6, s: -27.2}, 'GC': {h: -9.8, s: -24.4}, 'GG': {h: -8.0, s: -19.9}, 'CC': {h: -8.0, s: -19.9}
+        };
+        let H = 0.2, S = -5.7, R = 1.987;
+        for (let i = 0; i < seq.length - 1; i++) {
+            let pair = seq.substring(i, i + 2);
+            if (nn[pair]) { H += nn[pair].h; S += nn[pair].s; }
+        }
+        const Na = parseFloat(document.getElementById('naConc').value) / 1000;
+        const Mg = parseFloat(document.getElementById('mgConc').value) / 1000;
+        const Ct = parseFloat(document.getElementById('primerConc').value) / 1e9;
+        let tm = (1000 * H) / (S + R * Math.log(Ct / 4)) - 273.15;
+        tm += (16.6 * Math.log10(Na + 0.7 * Mg)); 
+        return tm.toFixed(1);
+    }
+
+    function findOptimalGenePart(fullSeq, isReverse, targetTm) {
+        let bestSeq = "", currentTm = 0;
+        for (let len = 15; len <= 25; len++) {
+            let subSeq = isReverse ? revComp(fullSeq.slice(-len)) : fullSeq.slice(0, len);
+            currentTm = parseFloat(calcTmNN(subSeq));
+            bestSeq = subSeq;
+            if (currentTm >= targetTm) break;
+        }
+        return { seq: bestSeq, tm: currentTm };
+    }
+
+    function calcPmolPerNg(length) {
+        return length > 0 ? (1000 / (length * 660)).toFixed(4) : 0;
+    }
+
+    function getCircularSubstr(fullSeq, start, length) {
+        const len = fullSeq.length;
+        let actualStart = ((start % len) + len) % len;
+        if (actualStart + length <= len) {
+            return fullSeq.substring(actualStart, actualStart + length);
+        } else {
+            const tail = fullSeq.substring(actualStart);
+            const head = fullSeq.substring(0, length - tail.length);
+            return tail + head;
+        }
+    }
+
+    function findEnzymeOnCircle(fullSeq, recognitionSeq) {
+        const doubleSeq = fullSeq + fullSeq;
+        const index = doubleSeq.indexOf(recognitionSeq);
+        return index;
+    }
+
+    function simulateDigestion() {
+        const fullVec = document.getElementById('fullVector').value;
+        const enzymeName1 = document.getElementById('enzyme1').value;
+        const enzymeName2 = document.getElementById('enzyme2').value;
+        
+        if (!fullVec || !enzymeName1 || !enzymeName2) return alert("请检查质粒序列和酶选择");
+
+        const e1 = RE_LIBRARY[enzymeName1];
+        const e2 = RE_LIBRARY[enzymeName2];
+        const keep = document.getElementById('keepSites').checked;
+
+        const pos1 = findEnzymeOnCircle(fullVec, e1[0]);
+        const pos2 = findEnzymeOnCircle(fullVec, e2[0]);
+
+        if (pos1 === -1 || pos2 === -1) return alert("未找到酶切位点（即使考虑环状结构也未找到）");
+
+        let cutIdx1 = keep ? pos1 + e1[0].length : pos1 + e1[1];
+        let cutIdx2 = keep ? pos2 : pos2 + e2[1];
+
+        const vecLeftSeq = getCircularSubstr(fullVec, cutIdx1 - 40, 40);
+        const vecRightSeq = getCircularSubstr(fullVec, cutIdx2, 40);
+
+        document.getElementById('vecLeft').value = vecLeftSeq;
+        document.getElementById('vecRight').value = vecRightSeq;
+        
+        let cutPoint1Normalized = ((cutIdx1 % fullVec.length) + fullVec.length) % fullVec.length;
+        let cutPoint2Normalized = ((cutIdx2 % fullVec.length) + fullVec.length) % fullVec.length;
+        
+        let dist = (cutPoint2Normalized - cutPoint1Normalized + fullVec.length) % fullVec.length;
+        let backboneLen = fullVec.length; 
+        
+        if (enzymeName1 !== enzymeName2 && dist < fullVec.length / 2) {
+            backboneLen = fullVec.length - dist;
+        }
+
+        if(backboneLen) document.getElementById('mixVecLen').value = backboneLen;
+
+        alert(`✅ 酶切成功！\n预估线性化载体长度: ${backboneLen} bp`);
+    }
+
+    // ================= 绘制环形图谱 (Plasmid Map) =================
+    function drawCircularMap(vecLen, fragLengths) {
+        const canvas = document.getElementById('mapCanvas');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const centerX = W / 2;
+        const centerY = H / 2;
+        const radius = 100; // 环半径
+        const strokeWidth = 20; // 环宽度
+        
+        const totalBp = vecLen + fragLengths.reduce((a, b) => a + b, 0);
+        if (totalBp === 0) return;
+
+        // 清空画布
+        ctx.clearRect(0, 0, W, H);
+        
+        // 辅助：角度转换 (bp -> radians)
+        // 起始点设为 -90度 (12点钟方向)
+        let currentAngle = -0.5 * Math.PI;
+
+        const colors = ['#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+        
+        // --- 1. 绘制载体骨架 (灰色) ---
+        const vecAngle = (vecLen / totalBp) * 2 * Math.PI;
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + vecAngle);
+        ctx.strokeStyle = '#94a3b8'; // 载体颜色
+        ctx.lineWidth = strokeWidth;
+        ctx.stroke();
+
+        // 载体文字
+        drawRadialLabel(ctx, centerX, centerY, radius, currentAngle, vecAngle, "Vector", `${vecLen}bp`);
+        
+        currentAngle += vecAngle;
+
+        // --- 2. 绘制插入片段 ---
+        fragLengths.forEach((len, idx) => {
+            const fragAngle = (len / totalBp) * 2 * Math.PI;
+            const color = colors[idx % colors.length];
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + fragAngle);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = strokeWidth; // 片段可以稍微突出一点吗？这里保持一致
+            ctx.stroke();
+            
+            // 片段间隔线 (白色)
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + 0.02); // 小白条
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = strokeWidth + 2;
+            ctx.stroke();
+
+            // 片段文字
+            drawRadialLabel(ctx, centerX, centerY, radius, currentAngle, fragAngle, `F${idx+1}`, `${len}bp`);
+
+            currentAngle += fragAngle;
+        });
+        
+        // --- 3. 中心总长文字 ---
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("Total Size", centerX, centerY - 10);
+        ctx.fillStyle = '#2563eb';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText(`${totalBp} bp`, centerX, centerY + 15);
+    }
+
+    // 绘制径向标签
+    function drawRadialLabel(ctx, cx, cy, r, startAngle, sweepAngle, title, subTitle) {
+        const midAngle = startAngle + sweepAngle / 2;
+        // 标签距离圆心的距离 (半径 + 环宽一半 + 偏移)
+        const labelR = r + 35; 
+        
+        const x = cx + labelR * Math.cos(midAngle);
+        const y = cy + labelR * Math.sin(midAngle);
+        
+        ctx.fillStyle = '#1e293b';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, x, y - 7);
+        
+        ctx.fillStyle = '#64748b';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(subTitle, x, y + 7);
+    }
+
+    function generateMultiPrimers() {
+        const vL = document.getElementById('vecLeft').value;
+        const vR = document.getElementById('vecRight').value;
+        const ovlLen = parseInt(document.getElementById('overlapLen').value);
+        const targetTm = parseFloat(document.getElementById('targetTm').value);
+        const frags = Array.from(document.querySelectorAll('.frag-input')).map(i => i.value).filter(v => v);
+        if (frags.length < 1) return alert("请输入片段序列");
+
+        const table = document.getElementById('resultTable');
+        table.innerHTML = "";
+        
+        const vLenStr = document.getElementById('fullVector').value.length;
+        let vLen = document.getElementById('mixVecLen').value ? parseFloat(document.getElementById('mixVecLen').value) : (vLenStr || 5000);
+        
+        const vRow = table.insertRow();
+        vRow.style.background = "#f0fdf4";
+        vRow.innerHTML = `<td colspan="2"><b>线性化载体</b></td><td colspan="2">长度: ${vLen} bp | 1ng ≈ ${calcPmolPerNg(vLen)} pmol</td><td>-</td>`;
+        
+        document.getElementById('mixVecLen').value = vLen;
+        
+        const fragLengths = [];
+
+        frags.forEach((fSeq, i) => {
+            fragLengths.push(fSeq.length);
+            const fOpt = findOptimalGenePart(fSeq, false, targetTm);
+            const rOpt = findOptimalGenePart(fSeq, true, targetTm);
+            const fOvl = (i === 0) ? vL.slice(-ovlLen) : frags[i-1].slice(-ovlLen);
+            const rOvl = (i === frags.length - 1) ? revComp(vR.slice(0, ovlLen)) : revComp(frags[i+1].slice(0, ovlLen));
+            
+            addFragmentRows(table, `片段 ${i+1}`, fSeq.length, calcPmolPerNg(fSeq.length), fOvl, fOpt, rOvl, rOpt);
+        });
+        document.getElementById('resultArea').style.display = "block";
+        
+        updateMixTableStructure(frags.map(f => f.length));
+        
+        // 绘制环形图谱
+        drawCircularMap(vLen, fragLengths);
+        
+        setTimeout(() => document.querySelector('.btn-calc').scrollIntoView({behavior: "smooth"}), 100);
+    }
+
+    function addFragmentRows(table, name, len, pmol, fOvl, fOpt, rOvl, rOpt) {
+        const r1 = table.insertRow();
+        r1.innerHTML = `
+            <td rowspan="2"><b>${name}</b><br><small>${len}bp | ${pmol}pmol</small></td>
+            <td>F</td>
+            <td class="primer-seq"><span class="hl-o">${fOvl}</span><span class="hl-g">${fOpt.seq}</span></td>
+            <td>${fOpt.tm}℃ <small>(${fOpt.seq.length}bp)</small></td>
+            <td><button class="copy-btn" onclick="copyText('${fOvl+fOpt.seq}', this)">复制</button></td>
+        `;
+        const r2 = table.insertRow();
+        r2.innerHTML = `
+            <td>R</td>
+            <td class="primer-seq"><span class="hl-o">${rOvl}</span><span class="hl-g">${rOpt.seq}</span></td>
+            <td>${rOpt.tm}℃ <small>(${rOpt.seq.length}bp)</small></td>
+            <td><button class="copy-btn" onclick="copyText('${rOvl+rOpt.seq}', this)">复制</button></td>
+        `;
+    }
+
+    function copyText(text, btn) {
+        navigator.clipboard.writeText(text).then(() => {
+            const old = btn.innerText; btn.innerText = "OK!";
+            setTimeout(() => btn.innerText = old, 1000);
+        });
+    }
+
+    function exportToCSV() {
+        const rows = document.querySelectorAll('#resultTable tr');
+        let csv = "\ufeff引物名称,序列(5'-3'),长度(bp),Tm值\n";
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td');
+            if (cols.length === 5) {
+                const name = cols[0].innerText.split('\n')[0] + "_" + cols[1].innerText;
+                const seq = cols[2].innerText;
+                const tm = cols[3].innerText.split('℃')[0];
+                const len = seq.length;
+                csv += `"${name}","${seq}",${len},${tm}\n`;
+            }
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `引物清单_${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+    }
+    
+    // ================= 体系计算逻辑 =================
+    
+    function updateMixTableStructure(fragLengths = []) {
+        const tbody = document.getElementById('mixTableBody');
+        while(tbody.rows.length > 1) {
+            tbody.deleteRow(1);
+        }
+        
+        const currentFrags = document.querySelectorAll('.frag-input');
+        
+        currentFrags.forEach((el, index) => {
+            const row = tbody.insertRow();
+            const lenVal = fragLengths[index] || (el.value ? el.value.length : '');
+            
+            row.innerHTML = `
+                <td>片段 ${index + 1}</td>
+                <td><input type="number" id="mixFragLen${index}" class="mix-input" placeholder="bp" value="${lenVal}"></td>
+                <td><input type="number" id="mixFragConc${index}" class="mix-input" placeholder="ng/μL"></td>
+                <td class="mix-result" id="resFragVol${index}">-</td>
+                <td style="font-size:12px; color:#666;" id="resFragPmol${index}">-</td>
+            `;
+        });
+    }
+
+    function calculateMix() {
+        const vecMass = parseFloat(document.getElementById('calcVecMass').value) || 0;
+        const vecLen = parseFloat(document.getElementById('mixVecLen').value) || 0;
+        const vecConc = parseFloat(document.getElementById('mixVecConc').value) || 0;
+        const ratio = parseFloat(document.getElementById('calcRatio').value) || 0;
+        const totalVol = parseFloat(document.getElementById('calcTotalVol').value) || 20;
+
+        if(vecMass <= 0 || vecLen <= 0 || vecConc <= 0) {
+            return alert("请完善载体信息（质量、长度、浓度）");
+        }
+
+        const vecPmol = (vecMass * 1000) / (vecLen * 660);
+        const vecVol = vecMass / vecConc;
+
+        document.getElementById('resVecPmol').innerText = vecPmol.toFixed(4);
+        document.getElementById('resVecVol').innerText = vecVol.toFixed(2);
+
+        let currentTotalVol = vecVol;
+        const fragRows = document.querySelectorAll('[id^=mixFragLen]');
+
+        fragRows.forEach((el, index) => {
+            const fLen = parseFloat(el.value) || 0;
+            const fConc = parseFloat(document.getElementById(`mixFragConc${index}`).value) || 0;
+            
+            if (fLen <= 0 || fConc <= 0) {
+                document.getElementById(`resFragVol${index}`).innerText = "Err";
+                return; 
+            }
+
+            const targetPmol = vecPmol * ratio;
+            const reqMass = (targetPmol * fLen * 660) / 1000;
+            const reqVol = reqMass / fConc;
+
+            document.getElementById(`resFragPmol${index}`).innerText = targetPmol.toFixed(4);
+            document.getElementById(`resFragVol${index}`).innerText = reqVol.toFixed(2);
+            
+            currentTotalVol += reqVol;
+        });
+
+        const waterVol = totalVol - currentTotalVol;
+        const waterEl = document.getElementById('resWater');
+        
+        if (waterVol < 0) {
+            waterEl.innerText = "体积超标!";
+            waterEl.style.color = "red";
+        } else {
+            waterEl.innerText = waterVol.toFixed(2);
+            waterEl.style.color = "var(--purple)";
+        }
+    }
+</script>
+</body>
+</html>
